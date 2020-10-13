@@ -1,0 +1,362 @@
+########Chub analysis########
+```{R}
+#Loading Libraries
+library('devtools')
+library('adegenet')
+library('vcfR') 
+library('rospca')
+library('dartR')
+library('zvau')
+library('geosphere')
+library('stringr')
+library('ggmap')
+library('ggcompoplot')
+library('vegan')
+library('spdep')
+library('adespatial')
+library('igraph')
+library('poppr') 
+library('smatr')
+
+#Loading data
+strata <- read.csv(file = "Final.Ma.strata.csv", header = TRUE)
+
+vcf<-read.vcfR(file="Final.Ma.hap.vcf")
+gen.vcf<-vcfR2genind(vcf)
+rm(vcf)
+strata(gen.vcf) <- strata[match(indNames(gen.vcf),strata$INDV),]
+
+gen <- read.genepop(file = "Final.Ma.hap.gen", ncode=3L, quiet = FALSE)
+strata(gen) <- strata[match(indNames(gen),strata$INDV),]
+head(strata(gen))
+
+#Setup colors
+c_State = c("red4", "mediumblue")
+c_POP = c("red", "blue", "lightslateblue", "red3", "navy", "mediumblue", "magenta", "maroon", "hotpink3")
+c_POP2 = c("red", "slateblue", "red3", "navy", "magenta", "maroon", "hotpink3")
+c_2 = c("red4", "mediumblue")
+c_3 = c("red4", "mediumblue", "green")
+c_4 = c("red4", "mediumblue", "green", "darkorange3")
+
+#Looking at Sites vs Locations
+table(gen@strata$POP,gen@strata$State)
+
+#General PCA
+X <- scaleGen(gen, NA.method="mean", scale=F)
+pca1 <- dudi.pca(X,cent=FALSE,scale=FALSE,scannf=FALSE,nf=5000)
+
+X2 <- scaleGen(gen2, NA.method="mean", scale=F)
+pca2 <- dudi.pca(X2,cent=FALSE,scale=FALSE,scannf=FALSE,nf=5000)
+
+#Plotting by river
+setPop(gen)<-~State
+ade4::s.class(pca1$li, pop(gen), col=c_State, cstar=0)
+mtext("PCA by River", 3, adj=0.05, line=2.5)
+mtext(paste("x-axis variation: ",format(round(100*pca1$eig[1]/sum(pca1$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.95)
+mtext(paste("y-axis variation: ",format(round(100*pca1$eig[2]/sum(pca1$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.95)
+
+tiff("PCA_raw_data_by_River.tif", res=300, height =2000, width=2000)
+ade4::s.class(pca1$li, pop(gen), col=c_State, cstar=0)
+mtext("PCA by River", 3, adj=0.05, line=2.5)
+mtext(paste("x-axis variation: ",format(round(100*pca1$eig[1]/sum(pca1$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.95)
+mtext(paste("y-axis variation: ",format(round(100*pca1$eig[2]/sum(pca1$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.95)
+dev.off()
+
+#Plotting by site
+setPop(gen)<-~POP
+ade4::s.class(pca1$li, pop(gen), col=c_POP, cstar=0, clabel=0)
+legend(x=-10, y=-5,legend=levels(pop(gen)),col=c_POP, cex=0.7, pch=16, bty="n", ncol=1)
+mtext("PCA by Site", 3, adj=0.05, line=2.5)
+mtext(paste("x-axis variation: ",format(round(100*pca1$eig[1]/sum(pca1$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.95)
+mtext(paste("y-axis variation: ",format(round(100*pca1$eig[2]/sum(pca1$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.95)
+
+tiff("PCA_raw_data_by_Site.tif", res=300, height =2000, width=2000)
+ade4::s.class(pca1$li, pop(gen), col=c_POP, cstar=0, clabel=0)
+legend(x=-10, y=-5,legend=levels(pop(gen)),col=c_POP, cex=0.7, pch=16, bty="n", ncol=1)
+mtext("PCA by Site", 3, adj=0.05, line=2.5)
+mtext(paste("x-axis variation: ",format(round(100*pca1$eig[1]/sum(pca1$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.95)
+mtext(paste("y-axis variation: ",format(round(100*pca1$eig[2]/sum(pca1$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.95)
+dev.off()
+
+#Plotting with combined site
+setPop(gen2)<-~POP2
+ade4::s.class(pca2$li, pop(gen2), col=c_POP2, cstar=0, clabel=0)
+legend(x=-9, y=-5,legend=levels(pop(gen2)),col=c_POP2, cex=0.7, pch=16, bty="n", ncol=1)
+mtext("PCA by Site", 3, adj=0.05, line=2.5)
+mtext(paste("x-axis variation: ",format(round(100*pca2$eig[1]/sum(pca2$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.95)
+mtext(paste("y-axis variation: ",format(round(100*pca2$eig[2]/sum(pca2$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.95)
+
+tiff("PCA_raw_data_by_Combined_Site.tif", res=300, height =2000, width=2000)
+ade4::s.class(pca2$li, pop(gen2), col=c_POP2, cstar=0, clabel=0)
+legend(x=-5, y=-5,legend=levels(pop(gen2)),col=c_POP2, cex=0.7, pch=16, bty="n", ncol=1)
+mtext("PCA by Site", 3, adj=0.05, line=2.5)
+mtext(paste("x-axis variation: ",format(round(100*pca2$eig[1]/sum(pca2$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.95)
+mtext(paste("y-axis variation: ",format(round(100*pca2$eig[2]/sum(pca2$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.95)
+dev.off()
+
+
+#General DAPC
+#K-means clustaring
+#Clustering figure
+tiff("Clustar_Ma.tiff")
+grp <- find.clusters(gen.net,  max.n.clust=10, n.pca=300, method = "kmeans")
+dev.off()
+
+#Assigning different clustars
+grp2 <- find.clusters(gen, max.n.clust=40, n.pca=300, n.clust =2, method="kmeans")
+grp3 <- find.clusters(gen, max.n.clust=40, n.pca=300, n.clust =3, method="kmeans")
+grp4 <- find.clusters(gen, max.n.clust=40, n.pca=300, n.clust =4, method="kmeans")
+
+#Assignments in table form
+setPop(gen)<-~State
+table(pop(gen), grp2$grp)	#Split Rio vs Pecos
+table(pop(gen), grp3$grp)	#Rio split into 2 groups(sampling sites are split)
+table(pop(gen), grp4$grp)	#Rio split into three (sampling sites are split)
+
+setPop(gen)<-~POP
+table(pop(gen), grp2$grp)	#Split Rio vs Pecos
+table(pop(gen), grp3$grp)	#Rio split into 2 groups(sampling sites are split)
+table(pop(gen), grp4$grp)	#Rio split into three (sampling sites are split)
+
+#2 groups splits Rio vs Pecos
+#3 groups Pecos is a group and Rio is split into 2 groups (within Rio each sampling site is split)
+#4 groups Pecos is one group and Rio three groups (each sampling site is split)
+#Suggests that the Rio vs Pecos split is real, but the other groupings are not
+
+#Adding Kmeans to the strata file
+gen@strata$K2 <- grp2$grp[match(gen@strata$INDV,names(grp2$grp))]
+gen@strata$K3 <- grp3$grp[match(gen@strata$INDV,names(grp3$grp))]
+gen@strata$K4 <- grp4$grp[match(gen@strata$INDV,names(grp4$grp))]
+
+#DAPC cross validation
+tiff("Xval_grps_Ma.tif", res=300, height =6000, width=2000)
+par(mfrow=c(3,1))
+xval.2.net <- xvalDapc(X, grp2$grp, n.pca.max = 300, training.set = 0.9, result = "groupMean", center = TRUE, scale = FALSE, n.pca = NULL, n.rep = 50, xval.plot = TRUE)
+xval.3.net <- xvalDapc(X, grp3$grp, n.pca.max = 300, training.set = 0.9, result = "groupMean", center = TRUE, scale = FALSE, n.pca = NULL, n.rep = 50, xval.plot = TRUE)
+xval.4.net <- xvalDapc(X, grp4$grp, n.pca.max = 300, training.set = 0.9, result = "groupMean", center = TRUE, scale = FALSE, n.pca = NULL, n.rep = 50, xval.plot = TRUE)
+dev.off()
+
+#DAPC apriori
+setPop(gen)<-~State
+dapc1 <- dapc(gen, pop(gen), n.pca=108, n.da=3)
+setPop(gen)<-~POP
+dapc2 <- dapc(gen, pop(gen), n.pca=108, n.da=3)
+
+#Plotting DAPCs
+tiff("DAPC_grps_Ma.tiff", res=300, height =2000, width=6000)
+par(mfrow=c(1,3))
+scatter(xval.2.net$DAPC, cstar=0, col=c_2,posi.da=NULL)
+mtext("K-means=2", 3, 2, adj = 0.95)
+mtext(paste("x-axis variation:", 100*round(xval.2.net$DAPC$var,3),"%"),1, adj=0.55, cex=0.75, line=0)
+scatter(xval.3.net$DAPC, cstar=0, col=c_3,posi.da=NULL)
+mtext("K-means=3", 3, 2, adj = 0.95)
+mtext(paste("x-axis variation:", round((xval.3.net$DAPC$eig[1]/sum(xval.3.net$DAPC$eig))*xval.3.net$DAPC$var,3)*100,"%"),1, adj=0.9, cex=0.75, line=-2)
+mtext(paste("y-axis variation:", round((xval.3.net$DAPC$eig[2]/sum(xval.3.net$DAPC$eig))*xval.3.net$DAPC$var,3)*100, "%"),1, adj=0.9, cex=0.75, line=-1)
+scatter(xval.4.net$DAPC, cstar=0, col=c_4,posi.da=NULL)
+mtext(paste("x-axis variation:", round((xval.4.net$DAPC$eig[1]/sum(xval.4.net$DAPC$eig))*xval.4.net$DAPC$var,3)*100,"%"),1, adj=0.9, cex=0.75, line=-2)
+mtext(paste("y-axis variation:", round((xval.4.net$DAPC$eig[2]/sum(xval.4.net$DAPC$eig))*xval.4.net$DAPC$var,3)*100, "%"),1, adj=0.9, cex=0.75, line=-1)
+mtext("K-means=4", 3, 2, adj = 0.95)
+dev.off()
+
+tiff("DAPC_apriori_Ma.tiff", res=300, height =2000, width=6000)
+par(mfrow=c(1,2))
+ade4::scatter(dapc1, col=c_State, posi.da="bottomright")
+mtext("DAPC By State", 3, 2, adj = 0.95)
+ade4::scatter(dapc2, col=c_POP, posi.da="bottomright")
+mtext("DAPC By Site", 3, 2, adj = 0.95)
+dev.off()
+
+#OUTFLANK Outliers
+setPop(gen.vcf)<-~POP
+tmp<-gl.outflank(gen.vcf, qthreshold = 0.1)
+length(which(tmp$outflank$results[15]=="TRUE"))	#0
+outliers<-tmp$outflank$results[which(tmp$outflank$results[15]=="TRUE"),1]
+out.list<-dput(matrix(unlist(strsplit(as.vector(outliers),"[.]")),ncol=2,byrow=T)[,1])
+tmp<-matrix(unlist(strsplit(as.vector(out.list),"[_]")),ncol=4,byrow=T)
+gen.out.list<-unique(paste(tmp[,1],tmp[,2],tmp[,3],sep="_"))
+length(gen.out.list) #0
+
+#Exporting data
+setPop(gen)<-~POP
+writeGenPop(gen, "SNP.TRS.Final_Ma_Site.gen", "Macrohybopsis Genpop file May 18, 2020")
+
+setPop(gen)<-~K2
+writeGenPop(gen, "SNP.TRS.Final_Ma_K2.gen", "Macrohybopsis Genpop file by Kmeans =2 May 18, 2020")
+ 
+setPop(gen)<-~K3
+writeGenPop(gen, "SNP.TRS.Final_Ma_K3.gen", "Macrohybopsis Genpop file by Kmeans =3 May 18, 2020")
+
+setPop(gen)<-~K4
+writeGenPop(gen, "SNP.TRS.Final_Ma_K4.gen", "Macrohybopsis Genpop file by Kmeans =4 May 18, 2020")
+```
+
+```{bash}
+#Convert genepop to Arlequin
+java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile SNP.TRS.Final_Ma_Site.gen -inputformat GENEPOP -outputfile SNP.TRS.Final_Ma.arp -outputformat ARLEQUIN -spid /home/afields/bin/genepop_to_arlequin_STD.spid
+
+#Convert genepop to Bayescan
+java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile SNP.TRS.Final_Ma_Site.gen -inputformat GENEPOP -outputfile SNP.TRS.Final_Ma.BS -outputformat BAYESCAN -spid /home/afields/bin/genepop_to_BS.spid
+
+#Running Bayescan
+bayescan_2.1 SNP.TRS.Final_Ma.BS -od ./Bayescan -all-trace -threads 20 -thin 100 -nbp 30 -pr_odds 100
+```
+
+```{R}
+#Analyzing Convergance
+library(coda)
+chain<-read.table("SNP.TRS.Final_M.sel",header=TRUE)
+chain<-chain[-c(1)]
+chain<-mcmc(chain,thin=10)
+plot(chain)
+summary(chain)
+autocorr.diag(chain)
+effectiveSize(chain)
+geweke.diag(chain, frac1=0.1, frac2=0.5)
+heidel.diag(chain, eps=0.1, pvalue=0.05)
+```
+
+```{bash}
+#Analyzing results
+head -n2 ../SNP.TRS.Final_Ma_Site.gen | tail -n 1 | sed 's/, /\n/g' > contigs
+echo -e "Contigs\tprob" | cat - contigs > tmp; mv tmp contigs
+paste contigs SNP.TRS.Final_M_fst.txt | awk '{$2=""; print}' > fst.txt
+
+awk 'NR==1{next;} $4<0.05{print $0}' fst.txt | wc -l
+awk 'NR==1{next;} $4<0.05{print $0}' fst.txt | less
+awk 'NR==1{next;} $4<0.05{print $1}' fst.txt | sort > Nj_Bayescan_Outliers_Site.list
+```
+
+```{R}
+#Loading Libraries
+library('devtools')
+library('adegenet')
+library('vcfR') 
+library('rospca')
+library('dartR')
+library('zvau')
+library('geosphere')
+library('stringr')
+library('ggmap')
+library('ggcompoplot')
+library('vegan')
+library('spdep')
+library('adespatial')
+library('igraph')
+library('poppr') 
+library('smatr')
+
+#Loading data
+strata <- read.csv(file = "Final.Ma.strata.csv", header = TRUE)
+
+gen <- read.genepop(file = "Final.Ma.hap.gen", ncode=3L, quiet = FALSE)
+strata(gen) <- strata[match(indNames(gen),strata$INDV),]
+head(strata(gen))
+
+#For setting up the Combined Site data Dave requested
+remove.ind<-"TAMU.Ma_Shiner179.I7.D03"
+set.ind<-subset(indNames(gen), !indNames(gen) %in% remove.ind)
+
+gen2 <- gen[set.ind, ]
+
+OUT <- read.table("Ma_Bayescan_Outliers_Site.list", head=F)
+
+#Setup colors
+c_POP2 = c("red", "slateblue", "red3", "navy", "magenta", "maroon", "hotpink3")
+
+#Splitting Data
+OUT <- as.character(as.matrix(OUT))
+set.loc<-subset(locNames(gen), !locNames(gen) %in% OUT)
+gen.net<-gen[, loc=set.loc]
+set.loc<-subset(locNames(gen), locNames(gen) %in% OUT)
+gen.out<-gen[, loc=set.loc]
+
+set.loc<-subset(locNames(gen2), !locNames(gen) %in% OUT)
+gen2.net<-gen2[, loc=set.loc]
+set.loc<-subset(locNames(gen2), locNames(gen) %in% OUT)
+gen2.out<-gen2[, loc=set.loc]
+
+#General PCA
+X <- scaleGen(gen, NA.method="mean", scale=F)
+pca1 <- dudi.pca(X,cent=FALSE,scale=FALSE,scannf=FALSE,nf=5000)
+
+X2 <- scaleGen(gen2, NA.method="mean", scale=F)
+pca2 <- dudi.pca(X2,cent=FALSE,scale=FALSE,scannf=FALSE,nf=5000)
+
+X2.net <- scaleGen(gen2.net, NA.method="mean", scale=F)
+pca2.net <- dudi.pca(X2.net, cent=FALSE,scale=FALSE,scannf=FALSE,nf=5000)
+
+X2.out <- scaleGen(gen2.out, NA.method="mean", scale=F)
+pca2.out <- dudi.pca(X2.out, cent=FALSE,scale=FALSE,scannf=FALSE,nf=5000)
+
+#Plotting with combined site
+setPop(gen2)<-~POP2
+ade4::s.class(pca2$li, pop(gen2), col=c_POP2, cstar=0, clabel=0)
+legend(x=-9, y=-5,legend=levels(pop(gen2)),col=c_POP2, cex=0.7, pch=16, bty="n", ncol=1)
+mtext("PCA by Site", 3, adj=0.05, line=2.5)
+mtext(paste("x-axis variation: ",format(round(100*pca2$eig[1]/sum(pca2$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.95)
+mtext(paste("y-axis variation: ",format(round(100*pca2$eig[2]/sum(pca2$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.95)
+
+tiff("PCA_raw_data_by_Combined_Site.tif", res=300, height =2000, width=2000)
+ade4::s.class(pca2$li, pop(gen2), col=c_POP2, cstar=0, clabel=0)
+legend(x=-5, y=-5,legend=levels(pop(gen2)),col=c_POP2, cex=0.7, pch=16, bty="n", ncol=1)
+mtext("All loci PCA by Site", 3, adj=0.05, line=2.5)
+mtext(paste("x-axis variation: ",format(round(100*pca2$eig[1]/sum(pca2$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.95)
+mtext(paste("y-axis variation: ",format(round(100*pca2$eig[2]/sum(pca2$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.95)
+dev.off()
+
+setPop(gen2.net)<-~POP2
+ade4::s.class(pca2.net$li, pop(gen2.net), col=c_POP2, cstar=0, clabel=0)
+legend(x=-8, y=12,legend=levels(pop(gen2.net)),col=c_POP2, cex=0.7, pch=16, bty="n", ncol=1)
+mtext("Neutral loci PCA by Site", 3, adj=0.05, line=2.5)
+mtext(paste("x-axis variation: ",format(round(100*pca2.net$eig[1]/sum(pca2.net$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.95)
+mtext(paste("y-axis variation: ",format(round(100*pca2.net$eig[2]/sum(pca2.net$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.95)
+
+tiff("PCA_raw_data_by_Combined_Site_NEUTRAL.tif", res=300, height =2000, width=2000)
+ade4::s.class(pca2.net$li, pop(gen2.net), col=c_POP2, cstar=0, clabel=0)
+legend(x=-8, y=12,legend=levels(pop(gen2.net)),col=c_POP2, cex=0.7, pch=16, bty="n", ncol=1)
+mtext("Neutral loci PCA by Site", 3, adj=0.05, line=2.5)
+mtext(paste("x-axis variation: ",format(round(100*pca2.net$eig[1]/sum(pca2.net$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.95)
+mtext(paste("y-axis variation: ",format(round(100*pca2.net$eig[2]/sum(pca2.net$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.95)
+dev.off()
+
+setPop(gen2.out)<-~POP2
+ade4::s.class(pca2.out$li, pop(gen2.out), col=c_POP2, cstar=0, clabel=0)
+legend(x=-3.5, y=-2.5,legend=levels(pop(gen2.out)),col=c_POP2, cex=0.7, pch=16, bty="n", ncol=1)
+mtext("Outlier loci PCA by Site", 3, adj=0.05, line=2.5)
+mtext(paste("x-axis variation: ",format(round(100*pca2.out$eig[1]/sum(pca2.out$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.95)
+mtext(paste("y-axis variation: ",format(round(100*pca2.out$eig[2]/sum(pca2.out$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.95)
+
+tiff("PCA_raw_data_by_Combined_Site_OUTLIER.tif", res=300, height =2000, width=2000)
+ade4::s.class(pca2.out$li, pop(gen2.out), col=c_POP2, cstar=0, clabel=0)
+legend(x=-3.5, y=-2,legend=levels(pop(gen2.out)),col=c_POP2, cex=0.7, pch=16, bty="n", ncol=1)
+mtext("Outlier loci PCA by Site", 3, adj=0.05, line=2.5)
+mtext(paste("x-axis variation: ",format(round(100*pca2.out$eig[1]/sum(pca2.out$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.95)
+mtext(paste("y-axis variation: ",format(round(100*pca2.out$eig[2]/sum(pca2.out$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.95)
+dev.off()
+
+#Exporting data
+setPop(gen.net)<-~POP
+writeGenPop(gen.net, "SNP.TRS.Final_Ma_Site_NEUTRAL.gen", "Macrohybopsis Genpop file of Neutral data May 19, 2020")
+
+setPop(gen.out)<-~POP
+writeGenPop(gen.out, "SNP.TRS.Final_Ma_Site_OUTLIER.gen", "Macrohybopsis Genpop file of Outlier data May 19, 2020")
+
+setPop(gen.net)<-~POP2
+writeGenPop(gen2, "SNP.TRS.Final_Ma_CombSite_ALL.gen", "Macrohybopsis Genpop file of All data May 19, 2020")
+
+setPop(gen.net)<-~POP2
+writeGenPop(gen2.net, "SNP.TRS.Final_Ma_CombSite_NEUTRAL.gen", "Macrohybopsis Genpop file of Neutral data May 19, 2020")
+
+setPop(gen.out)<-~POP2
+writeGenPop(gen2.out, "SNP.TRS.Final_Ma_CombSite_OUTLIER.gen", "Macrohybopsis Genpop file of Outlier data May 19, 2020")
+```
+
+```{bash}
+#Convert genepop to Arlequin
+java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile SNP.TRS.Final_Ma_Site_NEUTRAL.gen -inputformat GENEPOP -outputfile SNP.TRS.Final_Ma_Site_NEUTRAL.arp -outputformat ARLEQUIN -spid /home/afields/bin/genepop_to_arlequin_STD.spid
+java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile SNP.TRS.Final_Ma_Site_OUTLIER.gen -inputformat GENEPOP -outputfile SNP.TRS.Final_Ma_Site_OUTLIER.arp -outputformat ARLEQUIN -spid /home/afields/bin/genepop_to_arlequin_STD.spid
+
+java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile SNP.TRS.Final_Ma_CombSite_ALL.gen -inputformat GENEPOP -outputfile SNP.TRS.Final_Ma_CombSite_ALL.arp -outputformat ARLEQUIN -spid /home/afields/bin/genepop_to_arlequin_STD.spid
+java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile SNP.TRS.Final_Ma_CombSite_NEUTRAL.gen -inputformat GENEPOP -outputfile SNP.TRS.Final_Ma_CombSite_NEUTRAL.arp -outputformat ARLEQUIN -spid /home/afields/bin/genepop_to_arlequin_STD.spid
+java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile SNP.TRS.Final_Ma_CombSite_OUTLIER.gen -inputformat GENEPOP -outputfile SNP.TRS.Final_Ma_CombSite_OUTLIER.arp -outputformat ARLEQUIN -spid /home/afields/bin/genepop_to_arlequin_STD.spid
+```
