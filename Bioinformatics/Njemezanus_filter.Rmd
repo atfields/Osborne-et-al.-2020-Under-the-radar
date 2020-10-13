@@ -1,0 +1,168 @@
+##Script used for filtering the TotalRawSNPs.vcf file produced on the Notropis reads##
+
+```{bash}
+#Split Multiallelic Freebayes calls
+vcfallelicprimitives -k -g TotalRawSNPs.vcf | sed 's:\.|\.:\.\/\.:g' > TRS.prim &
+wait
+
+#Remove indels
+vcftools --vcf TRS.prim --recode-INFO-all --recode --out SNP.TRS --remove-indels &
+wait
+
+#Quality filter data
+vcftools --vcf SNP.TRS.recode.vcf --out SNP.TRS.QC --recode --recode-INFO-all --min-alleles 2 --minDP 5 --minQ 20 --minGQ 20 &
+	
+#Filters allelic balance, quality vs depth, strand representation and paired read representation
+dDocent_filters SNP.TRS.QC.recode.vcf SNP.TRS.dDocent
+  # no
+  # Used 10000 for depth
+
+#Filtering loci with high missing data
+vcftools --vcf SNP.TRS.dDocent.FIL.recode.vcf --out SNP.TRS.F01 --max-missing 0.5 --recode --recode-INFO-all
+
+#Filtering singleton and doubleton loci for depth (Singletons >20 reads; Doubletons > 10 reads)
+vcftools --vcf SNP.TRS.F01.recode.vcf --out out --singletons
+
+awk ' $3=="S" {print $1, $2}' out.singletons > sing.loci
+awk ' $3=="D" {print $1, $2}' out.singletons > doub.loci
+
+vcftools --vcf SNP.TRS.F01.recode.vcf --out SNP.TRS.F01a --recode --recode-INFO-all --exclude-positions sing.loci
+vcftools --vcf SNP.TRS.F01a.recode.vcf --out SNP.TRS.F01b --recode --recode-INFO-all --exclude-positions doub.loci
+
+
+vcftools --vcf SNP.TRS.F01.recode.vcf --out SNP.TRS.F01.sing --recode --recode-INFO-all --positions sing.loci
+vcftools --vcf SNP.TRS.F01.sing.recode.vcf --out SNP.TRS.F02.sing --recode --recode-INFO-all --minDP 20
+
+vcftools --vcf SNP.TRS.F01.recode.vcf --out SNP.TRS.F01.doub --recode --recode-INFO-all --positions doub.loci
+vcftools --vcf SNP.TRS.F01.doub.recode.vcf --out SNP.TRS.F02.doub --recode --recode-INFO-all --minDP 10
+
+vcf-concat SNP.TRS.F02.sing.recode.vcf SNP.TRS.F02.doub.recode.vcf SNP.TRS.F01b.recode.vcf > SNP.TRS.F02.vcf
+
+rm out.singletons
+
+#Filtering loci with low average read depth
+vcftools --vcf SNP.TRS.F02.vcf --out SNP.TRS.F03 --min-meanDP 20 --recode --recode-INFO-all
+
+#Filtering loci with missing data > 20%
+vcftools --vcf SNP.TRS.F03.recode.vcf --out SNP.TRS.F04 --max-missing 0.8 --recode --recode-INFO-all
+
+#Filtering Individuals with high coverage and high missing data
+vcftools --vcf SNP.TRS.F04.recode.vcf --out SNP.TRS.F05 --recode --remove-indv NM.Nj_Shiner055.I10.C08 --remove-indv NM.Nj_Shiner055.I7.C03 --remove-indv NM.Nj_Shiner110.I2.C06 --remove-indv NM.Nj_Shiner110.I4.D05 --remove-indv NM.Nj_Shiner024.I4.D08 --remove-indv NM.Nj_Shiner024.I2.D04
+
+vcftools --vcf SNP.TRS.dDocent.FIL.recode.vcf --out SNP.66indv.F01 --recode --recode-INFO-all --remove-indv NM.Nj_Shiner055.I10.C08 --remove-indv NM.Nj_Shiner055.I7.C03 --remove-indv NM.Nj_Shiner110.I2.C06 --remove-indv NM.Nj_Shiner110.I4.D05 --remove-indv NM.Nj_Shiner024.I4.D08 --remove-indv NM.Nj_Shiner024.I2.D04
+
+#Filtering singleton and doubleton loci for depth (Singletons >20 reads; Doubletons > 10 reads)
+vcftools --vcf SNP.66indv.F01.recode.vcf --out out --singletons
+
+awk ' $3=="S" {print $1, $2}' out.singletons > sing.loci
+awk ' $3=="D" {print $1, $2}' out.singletons > doub.loci
+
+vcftools --vcf SNP.66indv.F01.recode.vcf --out SNP.66indv.F01a --recode --recode-INFO-all --exclude-positions sing.loci
+vcftools --vcf SNP.66indv.F01a.recode.vcf --out SNP.66indv.F01b --recode --recode-INFO-all --exclude-positions doub.loci
+
+vcftools --vcf SNP.66indv.F01.recode.vcf --out SNP.66indv.F01.sing --recode --recode-INFO-all --positions sing.loci
+vcftools --vcf SNP.66indv.F01.sing.recode.vcf --out SNP.66indv.F02.sing --recode --recode-INFO-all --minDP 20
+
+vcftools --vcf SNP.66indv.F01.recode.vcf --out SNP.66indv.F01.doub --recode --recode-INFO-all --positions doub.loci
+vcftools --vcf SNP.66indv.F01.doub.recode.vcf --out SNP.66indv.F02.doub --recode --recode-INFO-all --minDP 10
+
+vcf-concat SNP.66indv.F02.sing.recode.vcf SNP.66indv.F02.doub.recode.vcf SNP.66indv.F01b.recode.vcf > SNP.66indv.F02.vcf
+
+rm out.singletons sing.loci doub.loci
+
+#Filtering loci with low average read depth
+vcftools --vcf SNP.66indv.F02.vcf --out SNP.66indv.F03 --min-meanDP 20 --recode --recode-INFO-all
+
+charts.sh SNP.66indv.F03.recode.vcf
+
+#Filtering individuals with > 50% missing data
+vcftools --vcf SNP.66indv.F03.recode.vcf --out SNP.66indv.F03 --missing-indv
+mawk -v x=0.50 '$5 > x' SNP.66indv.F03.imiss | cut -f1 > lowDP.indv
+vcftools --vcf SNP.66indv.F03.recode.vcf --out SNP.66indv.F04 --remove lowDP.indv --recode --recode-INFO-all
+
+charts.sh SNP.66indv.F04.recode.vcf
+
+#Filterout high quality/low depth SNPs and loci with missing data > 10%
+vcftools --vcf SNP.66indv.F04.recode.vcf --out SNP.66indv.F05 --exclude-positions SNP.66indv.F04.2018-09-10/SNP_Qual_outlier.20.txt --recode --recode-INFO-all --max-missing 0.9
+
+#Filter loci that have high variation in depth across a locus with an individual
+```{bash}
+vcftools --vcf SNP.66indv.F05.recode.vcf --out out --geno-depth
+```
+
+```{R}
+gdepth<-read.table(file="out.gdepth", head=T)
+gdepth[gdepth==-1]<-NA
+
+for (i in 3:dim(gdepth)[2]) {
+temp<-aggregate(gdepth[,i],by=list(gdepth[,1]), sd)
+if(i==3){indv.site.sd<-data.frame(temp,row.names=1)} else
+{indv.site.sd[,(i-2)]<-temp[,2]}
+}
+colnames(indv.site.sd)<-colnames(gdepth[3:dim(gdepth)[2]])
+tmp<-apply(indv.site.sd, 1, mean, na.rm=T)
+tmp2<-unique(c(names(which(tmp>50))))
+write.table(tmp2,file="bad.loci.sd", quote=F, col.names=F, row.names=F)
+q("no")
+```
+
+```{bash}
+grep "dDocent" SNP.66indv.F05.recode.vcf | cut -f 1,2 | uniq | tail -n +2 > contigs.txt
+grep -wf bad.loci.sd contigs.txt > bad.loci
+vcftools --vcf SNP.66indv.F05.recode.vcf --exclude-positions bad.loci --recode-INFO-all --out SNP.66indv.F06 --recode
+```
+
+#Filter out paralogs
+```{bash}
+rad_haplotyper.pl -v SNP.66indv.F06.recode.vcf -p popmap -r reference.fasta -x 15 -mp 5
+tail -n +2 stats.out > stats.txt
+sed -i 's/ /_/g' stats.txt
+```
+
+```{R}
+dat<-read.table(file="stats.txt", header=T, fill=T)
+dat2<-unique(dat[which(dat$Status=="FILTERED"),1])
+write.table(dat2,"bad.loci.haps", quote=F, col.names=F, row.names=F)
+q("no")
+```
+
+```{bash}
+grep "dDocent" SNP.66indv.F06.recode.vcf | cut -f 1,2 | uniq | tail -n +2 > contigs.txt
+grep -wf bad.loci.haps contigs.txt > bad.loci
+vcftools --vcf SNP.66indv.F06.recode.vcf --out SNP.66indv.F07 --recode --recode-INFO-all --exclude-positions bad.loci 
+
+dDocent_filters SNP.66indv.F07.recode.vcf SNP.66indv.F07
+	#no
+	#no
+
+charts.sh SNP.66indv.F07.FIL.recode.vcf
+
+vcftools --vcf SNP.66indv.F07.FIL.recode.vcf --out SNP.66indv.F08 --recode --recode-INFO-all --exclude-positions SNP.66indv.F07.FIL.2018-09-11/SNP_Qual_outlier.20.txt
+
+grep NM ../state.popmap | cut -f 1 > NM.fish
+grep -v NM.Nj_Shiner043.I10.B05 NM.fish | grep -v NM.Nj_Shiner086.I10.D07 | grep -v NM.Nj_Shiner123.I2.D11 >tmp; mv tmp NM.fish
+vcftools --vcf SNP.66indv.F08.recode.vcf --out SNP.NM.F08 --recode --recode-INFO-all --keep NM.fish
+
+vcftools --vcf SNP.66indv.F08.recode.vcf --out SNP.NM.F08.no_dups --recode --recode-INFO-all --remove-indv TAMU.Nj_Shiner193.I4.B08 --remove-indv TAMU.Nj_Shiner191.I4.B10 --remove-indv NM.Nj_Shiner123.I2.D11 --remove-indv NM.Nj_Shiner086.I10.D07 --remove-indv NM.Nj_Shiner043.I10.B05 --remove-indv NM.Nj_Shiner043.I7.A05 --remove-indv NM.Nj_Shiner086.I7.B03 --remove-indv NM.Nj_Shiner123.I7.D06 --remove-indv TAMU.Nj_Shiner191.I7.A10 --remove-indv TAMU.Nj_Shiner193.I7.A11
+
+vcftools --vcf SNP.NM.F08.no_dups.recode.vcf --out out --hardy
+```
+
+```{R}
+dat<-read.table("out.hwe", head=T)
+out<-dat[dat$P_HWE<0.001,1:2]
+write.table(out,"bad.hwe",quote=F,col.names=F, row.names=F)
+q("no")
+```
+
+```{bash}
+vcftools --vcf SNP.66indv.F08.recode.vcf --out SNP.66indv.F08.hwe --recode --recode-INFO-all --exclude-positions bad.hwe
+
+#vcftools --vcf SNP.66indv.F08.hwe.recode.vcf --out SNP.66indv.F09 --recode --recode-INFO-all --min-alleles 2 --minDP 5 --minQ 20 --minGQ 20 --max-missing 0.9
+#No effect
+
+vcftools --vcf SNP.66indv.F08.hwe.recode.vcf --out Final.Nj.no_dups --recode --recode-INFO-all --remove-indv TAMU.Nj_Shiner193.I4.B08 --remove-indv TAMU.Nj_Shiner191.I4.B10 --remove-indv NM.Nj_Shiner123.I2.D11 --remove-indv NM.Nj_Shiner086.I10.D07 --remove-indv NM.Nj_Shiner043.I10.B05 --remove-indv NM.Nj_Shiner043.I7.A05 --remove-indv NM.Nj_Shiner086.I7.B03 --remove-indv NM.Nj_Shiner123.I7.D06 --remove-indv TAMU.Nj_Shiner191.I7.A10 --remove-indv TAMU.Nj_Shiner193.I7.A11
+
+vcftools --vcf Final.Nj.no_dups.recode.vcf --out Final.Nj.no_dups.mac --recode --recode-INFO-all --mac 3
+
+rad_haplotyper.pl -v Final.Nj.no_dups.mac.recode.vcf -p popmap -r reference.fasta -x 25 -mp 5 -g Final.Nj.hap.gen -o Final.Nj.hap.vcf &
