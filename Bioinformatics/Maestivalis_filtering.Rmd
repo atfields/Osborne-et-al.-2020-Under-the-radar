@@ -1,24 +1,34 @@
 ##Script used for filtering the TotalRawSNPs.vcf file produced on the Macrobopsis reads##
 
-```{bash}```
 #Split Multiallelic Freebayes calls
+```{bash}
 vcfallelicprimitives -k -g TotalRawSNPs.vcf | sed 's:\.|\.:\.\/\.:g' > TRS.prim
+```
 
 #Remove indels
+```{bash}
 vcftools --vcf TRS.prim --recode-INFO-all --recode --out SNP.TRS --remove-indels
+```
 
-#Remove poor quality individuals and clonal fish
+#Remove poor quality individuals (High Missing data or High Fis) and duplicate samples
+```{bash}
 vcftools --vcf SNP.TRS.recode.vcf --out SNP.TRS.F00 --recode --recode-INFO-all --remove-indv NM.Ma_Shiner037.I4.C08 --remove-indv TAMU.Ma_Shiner158.I2.B06 --remove-indv TAMU.Ma_Shiner167.I7.C01 --remove-indv TAMU.Ma_Shiner168.I7.B04 --remove bad.fish
+```
 
 #Quality filter data
+```{bash}
 vcftools --vcf SNP.TRS.F00.recode.vcf --out SNP.TRS.QC --recode --recode-INFO-all --min-alleles 2 --minDP 5 --minQ 20 --minGQ 20
+```
 
 #Filters allelic balance, quality vs depth, strand representation and paired read representation
+```{bash}
 dDocent_filters SNP.TRS.QC.recode.vcf SNP.TRS.dDocent
 	# no
 	# Used 10000 for depth
+```
 
 #Filtering singleton and doubleton loci for depth (Singletons >20 reads; Doubletons > 10 reads)
+```{bash}
 vcftools --vcf SNP.TRS.dDocent.FIL.recode.vcf --out out --singletons
 
 awk ' $3=="S" {print $1, $2}' out.singletons > sing.loci
@@ -38,14 +48,19 @@ vcf-concat SNP.TRS.F02.sing.recode.vcf SNP.TRS.F02.doub.recode.vcf SNP.TRS.F01b.
 grep -v '#' SNP.TRS.F02.vcf | cut -f 1 | sort | uniq | wc -l
 
 rm out.singletons sing.loci doub.loci
+```
 
 #Filtering loci with low average read depth
+```{bash}
 vcftools --vcf SNP.TRS.F02.vcf --out SNP.TRS.F03 --min-meanDP 20 --recode --recode-INFO-all
+```
 
 #Filter loci that have high variation in depth across a locus with an individual
+```{bash}
 vcftools --vcf SNP.TRS.F03.recode.vcf --out out --geno-depth
+```
 
-```{R}```
+```{R}
 gdepth<-read.table(file="out.gdepth", head=T)
 gdepth[gdepth==-1]<-NA
 
@@ -61,60 +76,71 @@ length(tmp)
 length(tmp2)
 write.table(tmp2,file="bad.loci.sd", quote=F, col.names=F, row.names=F)
 q("no")
+```
 
-```{bash}```
+```{bash}
 grep "dDocent" SNP.TRS.F03.recode.vcf | cut -f 1,2 | uniq | tail -n +2 > contigs.txt
 grep -wf bad.loci.sd contigs.txt > bad.loci
 vcftools --vcf SNP.TRS.F03.recode.vcf  --out SNP.TRS.F04 --exclude-positions bad.loci --recode-INFO-all --recode
-
-charts.sh SNP.TRS.F04.recode.vcf
+```
 
 #Filtering loci with missing data
+```{bash}
 vcftools --vcf SNP.TRS.F04.recode.vcf --out SNP.TRS.F05 --max-missing 0.6 --recode --recode-INFO-all
-
-charts.sh SNP.TRS.F05.recode.vcf
+```
 
 #Filter out individuals with missing data
+```{bash}
 vcftools --vcf SNP.TRS.F05.recode.vcf --out SNP.TRS.F05 --missing-indv
 mawk -v x=0.4 '$5 > x' SNP.TRS.F05.imiss | cut -f1 > lowDP.indv
 vcftools --vcf SNP.TRS.F05.recode.vcf --out SNP.TRS.F06 --remove lowDP.indv --recode --recode-INFO-all
-
-charts.sh SNP.TRS.F06.recode.vcf
+```
 
 #Depth filter
+```{bash}
 dDocent_filters SNP.TRS.F06.recode.vcf SNP.TRS.F06
 	#no
 	#no
-
-charts.sh SNP.TRS.F06.FIL.recode.vcf
+```
 
 #Filter out individuals with missing data
+```{bash}
 vcftools --vcf SNP.TRS.F06.FIL.recode.vcf --out SNP.TRS.F06.FIL --missing-indv
 mawk -v x=0.38 '$5 > x' SNP.TRS.F06.FIL.imiss | cut -f1 > lowDP.indv
 vcftools --vcf SNP.TRS.F06.FIL.recode.vcf --out SNP.TRS.F07 --remove lowDP.indv --recode --recode-INFO-all
+```
 
 #Filtering loci with missing data
+```{bash}
 vcftools --vcf SNP.TRS.F07.recode.vcf --out SNP.TRS.F08 --max-missing 0.9 --recode --recode-INFO-all
+```
 
 #Filter out paralogs
+```{bash}
 rad_haplotyper.pl -v SNP.TRS.F08.recode.vcf -p popmap -r reference.fasta -x 20 -mp 5
 tail -n +2 stats.out > stats.txt
 sed -i 's/ /_/g' stats.txt
+```
 
-```{R}```
+```{R}
 dat<-read.table(file="stats.txt", header=T, fill=T)
 dat2<-unique(dat[which(dat$Status=="FILTERED"),1])
 write.table(dat2,"bad.loci.haps", quote=F, col.names=F, row.names=F)
 q("no")
+```
 
-```{bash}```
+```{bash}
 grep "dDocent" SNP.TRS.F08.recode.vcf | cut -f 1,2 | uniq | tail -n +2 > contigs.txt
 grep -wf bad.loci.haps contigs.txt > bad.loci
 vcftools --vcf SNP.TRS.F08.recode.vcf --out SNP.TRS.F09 --exclude-positions bad.loci --recode-INFO-all --recode
+```
 
+#Filtering out individuals with unusal Fis by population
+```{bash}
 vcftools --vcf SNP.TRS.F08.recode.vcf --out SNP.TRS.F08 --het
+```
 
-```{R}```
+```{R}
 het<-read.table("SNP.TRS.F08.het", head=T)
 colnames(het)<-c("INDV", "O.HOM.", "E.HOM.", "N_SITES", "Fis")
 pop<-read.table(file="popmap", header=FALSE)
@@ -130,22 +156,44 @@ pop.out<-append(pop.out,tmp)
 set<-subset(indv[,1], indv[,"Fis"] %in% pop.out)
 write.table(set, "pop.out",row.names=F, quote=F, col.names=F)
 q("no")
+```
 
-```{bash}```
+```{bash}
 vcftools --vcf SNP.TRS.F09.recode.vcf --out SNP.TRS.F10 --remove pop.out --recode --recode-INFO-all
+```
 
 #Filter out individuals with missing data
+```{bash}
 vcftools --vcf SNP.TRS.F09.recode.vcf --out SNP.TRS.F09 --missing-indv
 mawk -v x=0.2 '$5 > x' SNP.TRS.F09.imiss | cut -f1 > lowDP.indv
 vcftools --vcf SNP.TRS.F09.recode.vcf --out SNP.TRS.F10 --remove lowDP.indv --recode --recode-INFO-all
+```
 
-#Filtering loci with missing data
-vcftools --vcf SNP.TRS.F10.recode.vcf --out SNP.TRS.F11 --max-missing 0.95 --recode --recode-INFO-all
+#Removing duplicate samples
+```{bash}
+charts.sh SNP.TRS.F10.recode.vcf
+```
 
-#QC check
-vcftools --vcf SNP.TRS.F11.recode.vcf --out SNP.TRS.F11.QC --recode --recode-INFO-all --min-alleles 2 --minDP 5 --minQ 20 --minGQ 20 --max-missing 0.95
+```{R}
+indv <- read.csv("SNP.TRS.F10.2020-12-15/indv.csv", head=T)
+tmp.tab <- table(indv$Sample)
+dups <- names(tmp.tab[tmp.tab>1])
 
-#Remove duplicates
+remove <- vector()
+for(i in dups){
+tmp_df <- indv[indv$Sample==i,]
+remove <- unique(c(keep,as.character(tmp_df[tmp_df$MEAN_DEPTH!=max(tmp_df$MEAN_DEPTH),1])))
+}
+
+write.table(remove, "SNP.F10.dups", col.names=F, row.names=F, quote=F)
+q("no")
+```
+
+```{bash}
 vcftools --vcf SNP.TRS.F10.recode.vcf --out SNP.TRS.F10_nodup --remove SNP.F10.dups --recode --recode-INFO-all
+```
 
-rad_haplotyper.pl -v SNP.TRS.F10_nodup.recode.vcf -p popmap -r reference.fasta -x 25 -mp 5 -g Final.Ma.hap.gen -o Final.Ma.hap.vcf -a Final.Ma.hap.u &
+#Haplotyping the loci
+```{bash}
+rad_haplotyper.pl -v SNP.TRS.F10_nodup.recode.vcf -p popmap -r reference.fasta -x 25 -mp 5 -g Final.Ma.hap.gen -o Final.Ma.hap.vcf &
+```
