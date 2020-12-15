@@ -182,7 +182,7 @@ dups <- names(tmp.tab[tmp.tab>1])
 remove <- vector()
 for(i in dups){
 tmp_df <- indv[indv$Sample==i,]
-remove <- unique(c(keep,as.character(tmp_df[tmp_df$MEAN_DEPTH!=max(tmp_df$MEAN_DEPTH),1])))
+remove <- unique(c(remove,as.character(tmp_df[tmp_df$MEAN_DEPTH!=max(tmp_df$MEAN_DEPTH),1])))
 }
 
 write.table(remove, "SNP.F10.dups", col.names=F, row.names=F, quote=F)
