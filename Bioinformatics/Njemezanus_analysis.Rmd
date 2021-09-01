@@ -1,0 +1,270 @@
+########Shiner analysis########
+#Loading Libraries
+```{R}
+library('devtools')
+library('pegas')
+library('adegenet')
+library('vcfR') 
+library('rospca')
+library('dartR')
+library('zvau')
+library('geosphere')
+library('stringr')
+library('ggmap')
+library('ggcompoplot')
+library('vegan')
+library('spdep')
+library('adespatial')
+library('igraph')
+library('poppr') 
+library('smatr')
+library('radiator')
+library('related')
+library('ggcompoplot')
+library('dartR')
+library('scales')
+```
+
+#Loading data
+```{R}
+strata <- read.csv(file = "Final.Nj.strata.csv", header = TRUE)
+
+vcf<-read.vcfR(file="Final.Nj.hap.vcf")
+gen.vcf<-vcfR2genind(vcf)
+rm(vcf)
+strata(gen.vcf) <- strata[match(indNames(gen.vcf),strata$INDV),]
+
+gen <- read.genepop(file = "Final.Nj.hap.gen", ncode=3L, quiet = FALSE)
+strata(gen) <- strata[match(indNames(gen),strata$INDV),]
+head(strata(gen))
+```
+
+#OUTFLANK Outliers
+```{R}
+setPop(gen.vcf)<-~POP
+tmp<-gl.outflank(gen.vcf, qthreshold = 0.1)
+length(which(tmp$outflank$results[15]=="TRUE"))	#462
+outliers<-tmp$outflank$results[which(tmp$outflank$results[15]=="TRUE"),1]
+out.list<-dput(matrix(unlist(strsplit(as.vector(outliers),"[.]")),ncol=2,byrow=T)[,1])
+tmp<-matrix(unlist(strsplit(as.vector(out.list),"[_]")),ncol=4,byrow=T)
+gen.out.list<-unique(paste(tmp[,1],tmp[,2],tmp[,3],sep="_"))
+length(gen.out.list) #203
+
+write.table(gen.out.list, "Nj_Outflank_Outliers.txt", quote=F, col.names=F, row.names=F)
+```
+
+#Exporting data
+```{R}
+setPop(gen)<-~POP
+writeGenPop(gen, "SNP.TRS.Final_Nj_Site.gen", "Notropis Genpop file May 18, 2020")
+```
+
+#Convert genepop to Bayescan
+```{bash}
+java -jar PGDSpider2-cli.jar -inputfile Final.Nj.hap.gen -inputformat GENEPOP -outputfile SNP.TRS.Final_Nj_Site.BS -outputformat BAYESCAN -spid genepop_to_BS.spid
+```
+
+#Running Bayescan
+```{R}
+bayescan_2.1 SNP.TRS.Final_Nj_Site.BS -od ./Bayescan -all-trace -threads 10 -thin 100 -nbp 30 -pr_odds 100
+```
+
+#Analyzing Convergance
+```{R}
+library(coda)
+chain<-read.table("Bayescan/SNP.TRS.Final_Nj_sit.sel",header=TRUE)
+chain<-chain[-c(1)]
+chain<-mcmc(chain,thin=10)
+plot(chain)
+summary(chain)
+autocorr.diag(chain)
+effectiveSize(chain)
+geweke.diag(chain, frac1=0.1, frac2=0.5)
+heidel.diag(chain, eps=0.1, pvalue=0.05)
+```
+
+#Analyzing results
+```{bash}
+grep dDocent Final.Nj.hap.gen > contigs
+echo -e "Contigs\tprob" | cat - contigs > tmp; mv tmp contigs
+paste contigs Bayescan/SNP.TRS.Final_Nj_Sit_fst.txt | awk '{$2=""; print}' > Nj_fst.txt
+
+awk 'NR==1{next;} $4<0.05{print $0}' Nj_fst.txt | wc -l
+awk 'NR==1{next;} $4<0.05{print $1}' Nj_fst.txt | sort > Nj_Bayescan_Outliers_Site.list
+```
+
+#Loading Libraries
+```{R}
+library('devtools')
+library('pegas')
+library('adegenet')
+library('vcfR') 
+library('rospca')
+library('dartR')
+library('zvau')
+library('geosphere')
+library('stringr')
+library('ggmap')
+library('ggcompoplot')
+library('vegan')
+library('spdep')
+library('adespatial')
+library('igraph')
+library('poppr') 
+library('smatr')
+library('radiator')
+library('related')
+library('ggcompoplot')
+library('dartR')
+library('scales')
+```
+
+#Loading data
+```{R}
+strata <- read.csv(file = "Final.Nj.strata.csv", header = TRUE)
+
+vcf<-read.vcfR(file="Final.Nj.mac.hap.vcf")
+gen.vcf<-vcfR2genind(vcf)
+rm(vcf)
+strata(gen.vcf) <- strata[match(indNames(gen.vcf),strata$INDV),]
+
+gen <- read.genepop(file = "Final.Nj.hap.gen", ncode=3L, quiet = FALSE)
+strata(gen) <- strata[match(indNames(gen),strata$INDV),]
+head(strata(gen))
+
+OUT <- read.table("Nj_Bayescan_Outliers_Site.list", head=F)
+
+c_2 = c("red4", "mediumblue")
+```
+
+#Splitting Data
+```{R}
+OUT <- as.character(as.matrix(OUT))
+set.loc<-subset(locNames(gen), !locNames(gen) %in% OUT)
+gen.net<-gen[, loc=set.loc]
+set.loc<-subset(locNames(gen), locNames(gen) %in% OUT)
+gen.out<-gen[, loc=set.loc]
+```}
+
+#Looking for rough relatedness between individuals
+```{R}
+test.cov <- genomic_converter(gen.net, output = "related", parallel.core=20)
+test.out2 <- coancestry(test.cov$related , trioml =1)
+```
+
+#Exploring relationship data
+#What is the overall relationship spread in the samples
+```{R}
+par(mfrow=c(3,1))
+hist(test.out$relatedness$dyadml, breaks=200, main="All Relationships", col="red4")
+hist(test.out$relatedness$dyadml, breaks=200, main="All Relationships", ylim=c(0,100), col="red4")
+hist(test.out$relatedness$dyadml, breaks=200, main="All Relationships", ylim=c(0,10), col="red4")
+```
+
+#Looking at max relatedness value
+```{R}
+max(test.out$relatedness$dyadml)
+
+tmp.indv <- as.character(test.out$relatedness[test.out$relatedness$dyadml==max(test.out$relatedness$dyadml),2:3])
+gen@strata[gen@strata$relate.ID %in% tmp.indv,]
+```
+
+#Plotting all relatedness values
+```{R}
+p1 <- ggplot(tmp.dat, aes(x=trioml, fill=group))+ geom_histogram(alpha = 0.7, position="stack", bins=100) + scale_y_continuous(trans='log1p') + 
+labs(x="Relatedness", y="Log Frequency", fill="Comparisons") + theme_bw() + scale_fill_manual(labels = c("Within Pecos","Between Rio and Pecos","Within Rio"), values=c("red4", "mediumblue", "green4")) + 
+theme(legend.position = c(0.8, 0.8))
+p1
+
+ggsave("Shiner_Relatedness.tif", p1, device="tiff", dpi = 320)
+```
+
+#Removing one of the related individuals
+```{R}
+remove.ind <- c("NM.Nj_Shiner107.I10.C02")
+set.ind <- subset(indNames(gen.net), !indNames(gen.net) %in% remove.ind)
+
+gen.net2 <- gen.net[set.ind, ]
+```
+
+#General PCA
+```{R}
+X.net <- scaleGen(gen.net2, NA.method="mean", scale=F)
+pca1.net <- dudi.pca(X.net,cent=FALSE,scale=FALSE,scannf=FALSE,nf=5000)
+
+c_POP = c("navy", "red", "red3", "magenta", "maroon", "hotpink3", "violetred1", "orchid4")
+
+gen.net2@strata$POP <- factor(gen.net2@strata$POP, levels = c("Eagle Pass", "BLMACEC", "Gasline", "Hwy 82", "Hwy 70", "Scout", "Willow"))
+gen.net2@strata$POP2 <- factor(gen.net2@strata$POP2, levels = c("RG Eagle Pass", "Pecos BLMACEC", "Pecos Gasline", "Pecos Hwy 82", "Pecos Hwy 70", "Pecos Scout", "Pecos Willow"))
+
+setPop(gen.net2)<-~POP2
+ade4::s.class(pca1.net$li, gen.net2@strata$POP2, col=c_POP, cstar=0, clabel=0, grid=F, ylim=c(-10,25))
+legend(x=-20, y=21,legend=levels(gen.net2@strata$POP2),col=c_POP, cex=0.7, pch=16, bty="n", ncol=1, y.intersp=0.75)
+mtext("PCA by Site", 3, adj=0.05, line=2.5)
+mtext(paste("x-axis variation: ",format(round(100*pca1.net$eig[1]/sum(pca1.net$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.05)
+mtext(paste("y-axis variation: ",format(round(100*pca1.net$eig[2]/sum(pca1.net$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.05)
+
+tiff("PCA_NEUTRAL_data_by_Site_Nj.tif", res=300, height =2000, width=2000)
+ade4::s.class(pca1.net$li, gen.net2@strata$POP2, col=c_POP, cstar=0, clabel=0, grid=F, ylim=c(-10,25))
+legend(x=-20, y=21,legend=levels(gen.net2@strata$POP2),col=c_POP, cex=0.7, pch=16, bty="n", ncol=1, y.intersp=0.75)
+mtext("PCA by Site", 3, adj=0.05, line=2.5)
+mtext(paste("x-axis variation: ",format(round(100*pca1.net$eig[1]/sum(pca1.net$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.05)
+mtext(paste("y-axis variation: ",format(round(100*pca1.net$eig[2]/sum(pca1.net$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.05)
+dev.off()
+
+tiff("PCA_NEUTRAL_data_by_Site_Nj_PC.tif", res=300, height =2000, width=2000)
+ade4::s.class(pca1.net$li, gen.net2@strata$POP, col=c_POP, cstar=0, clabel=0, grid=F, ylim=c(-10,25))
+legend(x=-20, y=20,legend=levels(gen.net2@strata$POP),col=c_POP, cex=0.7, pch=16, bty="n", ncol=1, y.intersp=0.75)
+mtext("PCA by Site", 3, adj=0.05, line=2.5)
+mtext(paste("PC1 variation: ",format(round(100*pca1.net$eig[1]/sum(pca1.net$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.05)
+mtext(paste("PC2 variation: ",format(round(100*pca1.net$eig[2]/sum(pca1.net$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.05)
+dev.off()
+
+tiff("PCA_NEUTRAL_data_by_Site_Nj_PC_Riv.tif", res=300, height =2000, width=2000)
+ade4::s.class(pca1.net$li, gen.net2@strata$POP2, col=c_POP, cstar=0, clabel=0, grid=F, ylim=c(-10,25))
+legend(x=-20, y=20,legend=levels(gen.net2@strata$POP2),col=c_POP, cex=0.7, pch=16, bty="n", ncol=1, y.intersp=0.75)
+mtext("PCA by Site", 3, adj=0.05, line=2.5)
+mtext(paste("PC1 variation: ",format(round(100*pca1.net$eig[1]/sum(pca1.net$eig),3),nsmall=3),"%",sep=""),1, line=1, adj=0.05)
+mtext(paste("PC2 variation: ",format(round(100*pca1.net$eig[2]/sum(pca1.net$eig),3),nsmall=3),"%",sep=""),1, line=2, adj=0.05)
+dev.off()
+```
+
+#DAPC
+```{R}
+X.net <- scaleGen(gen.net2, NA.method="mean", scale=F)
+pca1.net <- dudi.pca(X.net,cent=FALSE,scale=FALSE,scannf=FALSE,nf=5000)
+grp2.net <- find.clusters(gen.net2, max.n.clust=40, n.pca=300, n.clust =2, method="kmeans")
+setPop(gen.net2)<-~POP2
+table(pop(gen.net2), grp2.net$grp)	#Split Rio vs Pecos
+
+xval.2.net <- xvalDapc(X.net, grp2.net$grp, n.pca.max = 300, training.set = 0.9, result = "groupMean", center = TRUE, scale = FALSE, n.pca = NULL, n.rep = 50, xval.plot = TRUE)
+```
+
+#Plotting DAPC
+```{R}
+tiff("DAPC_grps_Nj_NEUTRAL.tiff", res=300, height =2000, width=2000)
+par(mfrow=c(1,1))
+scatter(xval.2.net$DAPC, cstar=0, col=c_2[c(2,1)], posi.da=NULL)
+mtext("K-means=2", 3, -1, adj = 0.05)
+mtext(paste("Variation:", 100*round(xval.2.net$DAPC$var,3),"%"),1, adj=0.5, cex=1, line=4)
+legend(-38, 0.55, legend=c("Rio Grande", "Pecos R."), col=c("blue", "red"), pch=15)
+dev.off()
+
+xval.2.net$DAPC$grp.coord
+```
+
+#Exporting data
+```{R}
+setPop(gen.net)<-~POP
+writeGenPop(gen.net, "SNP.TRS.Final_Nj_Site_NEUTRAL.gen", "Notropis Genpop file of Neutral data May 19, 2020")
+
+setPop(gen.out)<-~POP
+writeGenPop(gen.out, "SNP.TRS.Final_Nj_Site_OUTLIER.gen", "Notropis Genpop file of Outlier data May 19, 2020")
+```
+
+#Convert to Arlequin
+```{bash}
+java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile SNP.TRS.Final_Nj_Site_NEUTRAL.gen -inputformat GENEPOP -outputfile SNP.TRS.Final_Nj_Site_NEUTRAL.arp -outputformat ARLEQUIN -spid genepop_to_arlequin_STD.spid
+
+java -jar /usr/local/bin/PGDSpider2-cli.jar -inputfile SNP.TRS.Final_Nj_Site_OUTLIER.gen -inputformat GENEPOP -outputfile SNP.TRS.Final_Nj_Site_OUTLIER.arp -outputformat ARLEQUIN -spid genepop_to_arlequin_STD.spid
+```
